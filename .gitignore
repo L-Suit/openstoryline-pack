@@ -1,0 +1,18 @@
+# ---- 大产物（可用脚本重新生成，不入 git）----
+.downloads/
+runtime/
+resources/
+build/
+.tmp_icon/
+*.tar.gz
+
+# ---- 上游源码目录里的产物 ----
+source/.storyline/models/
+source/outputs/
+source/.venv/
+source/resource/
+
+# ---- 通用 ----
+__pycache__/
+*.pyc
+.DS_Store
