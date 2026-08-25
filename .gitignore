@@ -10,7 +10,7 @@ build/
 source/.storyline/models/
 source/outputs/
 source/.venv/
-source/resource/
+source/resource
 
 # ---- 通用 ----
 __pycache__/
