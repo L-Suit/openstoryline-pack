@@ -12,6 +12,9 @@ source/outputs/
 source/.venv/
 source/resource
 
+# ---- IDE ----
+.idea/
+
 # ---- 通用 ----
 __pycache__/
 *.pyc
