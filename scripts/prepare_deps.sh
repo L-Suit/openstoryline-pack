@@ -42,16 +42,15 @@ echo "== 3/4 依赖安装 + 自检 =="
 
 echo "== 4/4 ffmpeg/ffprobe (arm64 静态版) =="
 mkdir -p runtime/ffmpeg-mac .downloads
-if [ ! -x runtime/ffmpeg-mac/ffmpeg ]; then
-  [ -f .downloads/ffmpeg9arm.zip ] || curl -fL --retry 3 -o .downloads/ffmpeg9arm.zip "https://www.osxexperts.net/ffmpeg9arm.zip"
-  unzip -oq .downloads/ffmpeg9arm.zip -d runtime/ffmpeg-mac/ && rm -rf runtime/ffmpeg-mac/__MACOSX
-  chmod +x runtime/ffmpeg-mac/ffmpeg
-fi
-if [ ! -x runtime/ffmpeg-mac/ffprobe ]; then
-  [ -f .downloads/ffprobe9arm.zip ] || curl -fL --retry 3 -o .downloads/ffprobe9arm.zip "https://www.osxexperts.net/ffprobe9arm.zip"
-  unzip -oq .downloads/ffprobe9arm.zip -d runtime/ffmpeg-mac/ && rm -rf runtime/ffmpeg-mac/__MACOSX
-  chmod +x runtime/ffmpeg-mac/ffprobe
-fi
+for fname in ffmpeg9arm.zip ffprobe9arm.zip; do
+  if [ ! -f ".downloads/$fname" ] || ! unzip -t ".downloads/$fname" >/dev/null 2>&1; then
+    rm -f ".downloads/$fname"
+    curl -fL --retry 5 --retry-delay 3 -o ".downloads/$fname" "https://www.osxexperts.net/$fname"
+  fi
+  unzip -oq ".downloads/$fname" -d runtime/ffmpeg-mac/
+done
+rm -rf runtime/ffmpeg-mac/__MACOSX
+chmod +x runtime/ffmpeg-mac/ffmpeg runtime/ffmpeg-mac/ffprobe
 
 echo ""
 echo "完成。可继续: ./scripts/bundle_mac.sh 或 installer/macos/build_dmg.sh"
