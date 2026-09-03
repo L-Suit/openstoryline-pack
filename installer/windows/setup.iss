@@ -1,6 +1,6 @@
 ; ============================================================
 ; OpenStoryline Windows Installer
-; 使用 Inno Setup 6.3+ 编译（iscc setup.iss 或 IDE 打开编译）
+; 使用 Inno Setup 7.x 64 位编译（2GB+ 素材必须 7.x 64 位，6.x 会 OOM）
 ;
 ; 与方案文档的差异说明：
 ; 1. resource 打入 {app}\app\resource\（config.toml 相对路径基于
@@ -56,6 +56,9 @@ Source: "..\..\source\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubd
 Source: "..\..\resources\*"; DestDir: "{app}\app\resource"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 ; 启动器
 Source: "..\..\launcher\start.bat"; DestDir: "{app}\launcher"; Flags: ignoreversion
+; GUI 启动器（托盘 + 原生窗口，快捷方式入口）与应用图标
+Source: "..\..\launcher\app_tray.py"; DestDir: "{app}\launcher"; Flags: ignoreversion
+Source: "..\..\assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 ; 运行期需要写入的目录（模型下载、输出），安装到 Program Files 时授予普通用户写权限
@@ -64,14 +67,16 @@ Name: "{app}\app\outputs"; Permissions: users-modify
 Name: "{app}\app\outputs\media"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\launcher\{#MyAppExeName}"; WorkingDir: "{app}"
+; GUI 启动器经 pythonw 运行，无控制台窗口
+Name: "{group}\{#MyAppName}"; Filename: "{app}\runtime\python\pythonw.exe"; Parameters: """{app}\launcher\app_tray.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\卸载 {#MyAppName} / Uninstall"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\launcher\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\runtime\python\pythonw.exe"; Parameters: """{app}\launcher\app_tray.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\launcher\{#MyAppExeName}"; Description: "立即启动 {#MyAppName} / Launch now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\runtime\python\pythonw.exe"; Parameters: """{app}\launcher\app_tray.py"""; WorkingDir: "{app}"; Description: "立即启动 {#MyAppName} / Launch now"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; 清理运行期生成的模型和输出
 Type: filesandordirs; Name: "{app}\app\.storyline\models"
 Type: filesandordirs; Name: "{app}\app\outputs"
+Type: filesandordirs; Name: "{app}\app\.storyline\logs"

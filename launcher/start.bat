@@ -4,8 +4,9 @@ title OpenStoryline
 setlocal EnableDelayedExpansion
 
 :: ============================================================
-:: OpenStoryline Windows Launcher
-:: 位置: <安装目录>\launcher\start.bat
+:: OpenStoryline Windows Launcher (调试入口)
+:: 正式安装包使用 app_tray.py（托盘 + 原生窗口，无控制台）。
+:: 本脚本保留用于开发调试：带控制台直接看 Web 日志。
 :: 功能: 设置环境 -> 首次启动下载模型 -> 启动 MCP + Web 服务 -> 打开浏览器
 :: ============================================================
 

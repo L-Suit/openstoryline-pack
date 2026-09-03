@@ -22,7 +22,8 @@ openstoryline-pack/
 │   ├── windows/setup.iss     ← Inno Setup 脚本
 │   └── macos/                ← build_dmg.sh + Info.plist
 ├── launcher/
-│   ├── start.bat             ← Windows 启动器
+│   ├── app_tray.py           ← Windows GUI 启动器（托盘 + 原生窗口，正式入口）
+│   └── start.bat             ← Windows 调试启动器（带控制台看日志）
 │   └── launcher.sh           ← macOS 启动器（.app/Contents/MacOS/launcher）
 ├── assets/                   ← icon.ico / icon.icns
 └── scripts/
@@ -48,6 +49,7 @@ openstoryline-pack/
    - Windows：加 `--extra-index-url https://download.pytorch.org/whl/cpu`，解析出无 cuda 依赖的 `torch+cpu`，一遍装完（见 `requirements-win.txt`，其中 uvicorn[standard] 拆开了，去掉仅非 Windows 的 uvloop）。
    - macOS：分两遍离线安装（见 `requirements-mac-pass1.txt` / `requirements-mac-pass2.txt`）：pass1 装除 torch 系之外的全部 wheel；pass2 用 `--no-deps` 装 torch/transnetv2/sentence-transformers/langchain-huggingface 等，其真实依赖（sympy、networkx、jinja2、setuptools<82、transformers==4.57.6、tokenizers==0.22.2、huggingface_hub==0.36.2 等）已在 pass1 显式包含。
    - PyPI 官方 CDN 在部分网络下极慢且易断，改用 `https://mirrors.aliyun.com/pypi/simple/` 可提速数十倍；`scripts/fetch_wheels.py` 可按 pip --report 清单断点续传下载 wheel。
+12. **Windows 正式入口为 `app_tray.py`（GUI 启动器）**：经 `pythonw.exe` 运行，全程无控制台。托盘常驻（打开主界面 / 配置文件 / 日志 / 退出），主界面用 pywebview 原生窗口加载 Web UI，关窗即最小化到托盘。首次启动模型下载带 tkinter 进度窗；日志写入 `app\.storyline\logs\`（app.log / web.log / mcp.log），uvicorn 运行日志不再显示在黑窗口里。未检测到 WebView2 时自动回退浏览器打开。依赖：pystray / pywebview / pythonnet / proxy-tools / bottle（proxy-tools 无 wheel，交叉构建时需单独处理）。
 
 ## 打包方法
 
@@ -90,6 +92,13 @@ xvfb-run -a wine 'C:\InnoSetup7\ISCC.exe' 'Z:\.../installer\windows\setup.iss'
 
 产物: `build\windows\OpenStoryline-Setup-1.0.0-win64.exe`
 
+安装后行为（GUI 启动器）：
+- 桌面/开始菜单快捷方式运行 `runtime\python\pythonw.exe launcher\app_tray.py`，无控制台窗口。
+- 首次启动弹出模型下载进度窗（约 106MB），完成后自动打开原生应用窗口；再次启动直接进主界面。
+- 关闭应用窗口 = 最小化到托盘，服务继续运行；从托盘菜单「退出」才真正停止服务。
+- 运行日志在 `app\.storyline\logs\`；`launcher\start.bat` 保留为调试入口（带控制台直接看日志）。
+- 单实例：重复双击快捷方式会激活已运行的主窗口，不会重复起服务。
+
 ### 干净环境测试清单（Step 10）
 
 在无 Python / 无 FFmpeg 的机器上：
@@ -104,4 +113,4 @@ xvfb-run -a wine 'C:\InnoSetup7\ISCC.exe' 'Z:\.../installer\windows\setup.iss'
 
 - 首次启动会自动下载约 106MB 模型文件（transnetv2 权重 + 句向量模型），需要联网。
 - 使用前需在 `app/config.toml` 填写 LLM/VLM 的 `api_key`、`base_url`、`model`。
-- 浏览器自动打开 `http://127.0.0.1:7860`；关闭启动窗口 / 退出应用即停止服务。
+- Windows 安装版通过托盘图标 / 应用窗口使用（地址 `http://127.0.0.1:7860`）；托盘菜单「退出」即停止服务。

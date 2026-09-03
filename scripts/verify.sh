@@ -26,6 +26,9 @@ if [ "$TARGET" = "windows" ] || [ "$TARGET" = "all" ]; then
   check runtime/ffmpeg-win/ffmpeg.exe "FFmpeg (Windows)"
   check installer/windows/setup.iss "Inno Setup 脚本"
   check launcher/start.bat "Windows 启动器"
+  check launcher/app_tray.py "Windows GUI 启动器 (托盘)"
+  check runtime/python-win/Lib/site-packages/pystray "依赖: pystray"
+  check runtime/python-win/Lib/site-packages/webview "依赖: pywebview"
 fi
 
 if [ "$TARGET" = "macos" ] || [ "$TARGET" = "all" ]; then
@@ -44,6 +47,9 @@ check source/agent_fastapi.py "项目源码"
 check source/config.toml "配置文件"
 check resources/bgms "资源: BGM"
 check resources/fonts "资源: 字体"
+check resources/script_templates/meta.json "资源: 脚本模板索引"
+check resources/fonts/font_info.json "资源: 字体索引"
+check resources/tts/tts_providers.json "资源: TTS 配置"
 check assets/icon.ico "图标 (ico)"
 check assets/icon.icns "图标 (icns)"
 
