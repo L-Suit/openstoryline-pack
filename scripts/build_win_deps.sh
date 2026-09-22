@@ -38,6 +38,8 @@ python3 -m pip install --dry-run --target "$T" "${PF[@]}" --timeout 60 --retries
 
 echo "== [3/5] curl 下载 wheels =="
 python3 scripts/fetch_wheels.py /tmp/win_report.json "$W" --exclude torch
+python3 -m pip download -d "$W" --no-deps "${PF[@]}" --timeout 120 --retries 5 \
+  --index-url https://download.pytorch.org/whl/cpu "torch==2.13.0+cpu" 2>&1 | tail -1
 
 echo "== [4/5] 离线安装 =="
 rm -rf "$T" && mkdir -p "$T"

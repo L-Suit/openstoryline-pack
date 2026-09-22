@@ -1,0 +1,225 @@
+name: Build and publish installers
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Installer version for a test build (for example 1.2.3)"
+        required: true
+        default: "1.0.0"
+        type: string
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Resolve and validate version
+        id: version
+        shell: bash
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            PUBLISH=true
+            TAG="$GITHUB_REF_NAME"
+          else
+            VERSION="$MANUAL_VERSION"
+            PUBLISH=false
+            TAG=""
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must use the X.Y.Z format; got: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows installer
+    needs: metadata
+    runs-on: windows-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      APP_VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore Windows build inputs
+        id: windows-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            runtime/python-win
+            runtime/ffmpeg-win
+            resources
+          key: windows-inputs-v1-${{ hashFiles('requirements-win.txt', 'scripts/prepare_windows.ps1') }}
+
+      - name: Prepare embedded runtime, FFmpeg, and resources
+        if: steps.windows-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./scripts/prepare_windows.ps1
+
+      - name: Verify build inputs
+        shell: bash
+        run: ./scripts/verify.sh windows
+
+      - name: Install Inno Setup 7
+        shell: pwsh
+        run: |
+          $installer = Join-Path $PWD "build\tools\innosetup-7.1.0-x64.exe"
+          $installDir = Join-Path $PWD "build\tools\inno"
+          New-Item -ItemType Directory -Force (Split-Path $installer), $installDir | Out-Null
+          curl.exe -fL --retry 5 --retry-all-errors `
+            -o $installer `
+            "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download Inno Setup" }
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notlike "*Pyrsys B.V.*") {
+            throw "Inno Setup signature verification failed: $($signature.Status) / $($signature.SignerCertificate.Subject)"
+          }
+
+          $process = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/CURRENTUSER",
+            "/DIR=$installDir"
+          )
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed with exit code $($process.ExitCode)" }
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path $PWD "build\tools\inno\ISCC.exe"
+          & $iscc "/Q" "/DMyAppVersion=$env:APP_VERSION" "installer\windows\setup.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
+
+          $expected = Join-Path $PWD "build\windows\OpenStoryline-Setup-$env:APP_VERSION-win64.exe"
+          if (-not (Test-Path -LiteralPath $expected)) { throw "Installer was not created: $expected" }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-windows
+          path: build/windows/OpenStoryline-Setup-${{ env.APP_VERSION }}-win64.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  macos:
+    name: macOS installer
+    needs: metadata
+    runs-on: macos-14
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      APP_VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore macOS build inputs
+        id: macos-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            runtime/python-mac
+            runtime/ffmpeg-mac
+            resources
+          key: macos-arm64-inputs-v1-${{ hashFiles('requirements-mac-pass1.txt', 'requirements-mac-pass2.txt', 'scripts/build_mac_deps.sh', 'scripts/prepare_deps.sh') }}
+
+      - name: Prepare embedded runtime, FFmpeg, and resources
+        if: steps.macos-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          chmod +x scripts/prepare_deps.sh scripts/build_mac_deps.sh scripts/verify.sh
+          ./scripts/prepare_deps.sh macos-arm64
+
+      - name: Verify build inputs
+        shell: bash
+        run: ./scripts/verify.sh macos
+
+      - name: Build DMG
+        shell: bash
+        run: |
+          chmod +x installer/macos/build_dmg.sh launcher/launcher.sh
+          ./installer/macos/build_dmg.sh
+
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-macos
+          path: build/macos/OpenStoryline-${{ env.APP_VERSION }}-macOS.dmg
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    if: needs.metadata.outputs.publish == 'true'
+    needs:
+      - metadata
+      - windows
+      - macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: installers-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum ./*.exe ./*.dmg > SHA256SUMS.txt
+
+      - name: Create or update GitHub Release
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "OpenStoryline $RELEASE_TAG" \
+              --generate-notes
+          fi

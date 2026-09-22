@@ -8,7 +8,7 @@
 set -e
 
 APP_NAME="OpenStoryline"
-VERSION="1.0.0"
+VERSION="${APP_VERSION:-1.0.0}"
 BUILD_DIR="../../build/macos"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="$APP_NAME-$VERSION-macOS.dmg"
@@ -25,6 +25,8 @@ mkdir -p "$APP_DIR/Contents/Frameworks"
 
 # 复制 Info.plist
 cp ./Info.plist "$APP_DIR/Contents/"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_DIR/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
 
 # 复制启动器
 cp ../../launcher/launcher.sh "$APP_DIR/Contents/MacOS/launcher"

@@ -10,7 +10,9 @@
 ; ============================================================
 
 #define MyAppName "OpenStoryline"
+#ifndef MyAppVersion
 #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "OpenStoryline"
 #define MyAppURL "http://127.0.0.1:7860"
 #define MyAppExeName "start.bat"
@@ -20,6 +22,8 @@ AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\assets\icon.ico
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=..\..\build\windows
@@ -69,7 +73,7 @@ Name: "{app}\app\outputs\media"; Permissions: users-modify
 [Icons]
 ; GUI 启动器经 pythonw 运行，无控制台窗口
 Name: "{group}\{#MyAppName}"; Filename: "{app}\runtime\python\pythonw.exe"; Parameters: """{app}\launcher\app_tray.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon.ico"
-Name: "{group}\卸载 {#MyAppName} / Uninstall"; Filename: "{uninstallexe}"
+Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\runtime\python\pythonw.exe"; Parameters: """{app}\launcher\app_tray.py"""; WorkingDir: "{app}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
 [Run]

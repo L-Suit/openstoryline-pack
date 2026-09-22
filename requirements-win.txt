@@ -9,6 +9,7 @@ langchain-core==1.2.7
 mcp==1.26.0
 colorlog==6.9.0
 librosa==0.11.0
+torch==2.13.0+cpu
 transnetv2_pytorch==1.0.5
 langchain==1.2.4
 langchain_mcp_adapters==0.2.1

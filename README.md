@@ -53,6 +53,25 @@ openstoryline-pack/
 
 ## 打包方法
 
+### GitHub 自动构建与发布（推荐）
+
+仓库包含 `.github/workflows/release-installers.yml`。推送 `vX.Y.Z` 格式的 Git 标签后，GitHub Actions 会并行完成以下工作：
+
+1. 在 Windows runner 上恢复内嵌 Python、依赖、FFmpeg 和静态资源，并使用 64 位 Inno Setup 7 构建 `.exe`。
+2. 在 Apple Silicon macOS runner 上恢复对应运行时并构建 `.dmg`。
+3. 两个平台都成功后，自动创建 GitHub Release，上传安装包和 `SHA256SUMS.txt`。
+
+发布新版本：
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+版本号必须使用三段数字格式，例如 `v1.2.3`。普通分支 push 不会触发大型安装包构建，避免浪费 macOS Actions 时长。需要试跑时，可在 GitHub 的 **Actions → Build and publish installers → Run workflow** 手动执行；手动执行只生成 Actions artifacts，不创建 Release。
+
+首次构建需要下载数 GB 的运行时和资源，耗时会较长；成功后会使用 Actions cache 加速后续构建。当前 macOS 应用未签名、Windows 安装包也未做代码签名，因此系统仍可能显示安全提示。如需消除提示，需要另外配置 Apple Developer ID、公证和 Windows 代码签名证书。
+
 ### 重建 macOS 依赖环境（依赖有变更时）
 
 ```bash
