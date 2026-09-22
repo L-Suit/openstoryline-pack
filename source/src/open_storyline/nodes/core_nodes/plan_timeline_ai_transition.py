@@ -12,12 +12,13 @@ class PlanTimelineAITransitionNode(BaseNode):
     meta = NodeMeta(
         name="plan_timeline_ai_transition",
         description=(
-            "Create a coherent timeline for AI generated . "
+            "Create a coherent timeline for AI generated transitions, mounting the "
+            "generated script as subtitles distributed across each group's clips. "
         ),
         node_id="plan_timeline_ai_transition",
         node_kind="plan_timeline",
-        require_prior_kind=["split_shots", "generate_ai_transition", "music_rec"],
-        default_require_prior_kind=["split_shots", "generate_ai_transition", "music_rec"],
+        require_prior_kind=["split_shots", "generate_ai_transition", "generate_script", "music_rec"],
+        default_require_prior_kind=["split_shots", "generate_ai_transition", "generate_script", "music_rec"],
         next_available_node=["render_video"],
     )
     
@@ -40,15 +41,19 @@ class PlanTimelineAITransitionNode(BaseNode):
         groups = generate_ai_transition.get("groups", [])
         transition_info = generate_ai_transition.get("transition_info", {})
         music = inputs.get("music_rec", {}).get("bgm", {})
-        
+        generate_script = inputs.get("generate_script", {}) or {}
+
         image_duration_ms = inputs.get("image_duration_ms", 2000)
         clips_by_clip_id = {clip.get("clip_id", ""): clip for clip in clips}
 
         current_cursor = 0
         video_segments = []
         bgm_segments = []
+        group_spans: Dict[str, Dict[str, int]] = {}
 
         for group in groups:
+            group_id = group.get("group_id")
+            group_start_cursor = current_cursor
             clip_ids = group.get("clip_ids")
             for clip in clip_ids:
                 if self._is_transition_clip_id(clip):
@@ -106,6 +111,14 @@ class PlanTimelineAITransitionNode(BaseNode):
                     })
                     current_cursor += current_clip_duration
 
+            if group_id is not None and current_cursor > group_start_cursor:
+                group_spans[group_id] = {"start": group_start_cursor, "end": current_cursor}
+
+        subtitle_segments = self._build_subtitle_track(
+            generate_script=generate_script,
+            group_spans=group_spans,
+        )
+
         bgm_segments = self._build_bgm_track(
             background_music=music,
             total_duration_ms=current_cursor,
@@ -114,12 +127,70 @@ class PlanTimelineAITransitionNode(BaseNode):
         return {
             "tracks": {
                 "video": video_segments,
-                "subtitles": [],
+                "subtitles": subtitle_segments,
                 "voiceover": [],
                 "bgm": bgm_segments,
             }
         }
-        
+
+    def _build_subtitle_track(
+        self,
+        *,
+        generate_script: Dict[str, Any],
+        group_spans: Dict[str, Dict[str, int]],
+    ) -> List[Dict[str, Any]]:
+        """Distribute each group's subtitle units across that group's timeline span.
+
+        The AI-transition timeline has no TTS/beat timing to anchor subtitles to, so
+        each group's span (from its first clip to its last) is split proportionally to
+        the character length of each subtitle unit.
+        """
+        subtitle_segments: List[Dict[str, Any]] = []
+        if not generate_script or not group_spans:
+            return subtitle_segments
+
+        for group_script in generate_script.get("group_scripts", []) or []:
+            group_id = group_script.get("group_id")
+            span = group_spans.get(group_id)
+            if not span:
+                continue
+
+            units = group_script.get("subtitle_units", []) or []
+            if not units:
+                continue
+
+            span_start = span["start"]
+            span_duration = span["end"] - span["start"]
+            if span_duration <= 0:
+                continue
+
+            unit_lengths = [max(len((unit.get("text") or "").strip()), 1) for unit in units]
+            total_length = sum(unit_lengths)
+
+            cursor = span_start
+            for index_in_group, (unit, unit_length) in enumerate(zip(units, unit_lengths)):
+                text = (unit.get("text") or "").strip()
+                # Last unit absorbs any rounding remainder so the track ends exactly on span end.
+                if index_in_group == len(units) - 1:
+                    unit_end = span["end"]
+                else:
+                    unit_end = cursor + int(span_duration * unit_length / total_length)
+
+                if text and unit_end > cursor:
+                    subtitle_segments.append({
+                        "group_id": group_id,
+                        "unit_id": unit.get("unit_id"),
+                        "index_in_group": index_in_group,
+                        "text": text,
+                        "timeline_window": {
+                            "start": cursor,
+                            "end": unit_end,
+                        },
+                    })
+                cursor = unit_end
+
+        return subtitle_segments
+
     def _is_transition_clip_id(self, clip_id: Any) -> bool:
         return isinstance(clip_id, str) and clip_id.startswith("transition_")
     

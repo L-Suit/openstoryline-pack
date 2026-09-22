@@ -737,7 +737,9 @@ class RenderVideoPipeline:
             bg_color=bg_color,
         )
         
-        font_path = self._fontname2path.get(text_rec[0]['font_name']) if len(text_rec) > 0 else None
+        # `text_rec` may be None (e.g. when the font-style recommendation state exists
+        # but produced no result) or an empty list. Guard both before indexing.
+        font_path = self._fontname2path.get(text_rec[0].get('font_name')) if text_rec else None
         subtitle_renderer = PillowSubtitleRenderer(font_path=font_path)
         audio_composer = AudioTrackComposer(cache=cache)
 
